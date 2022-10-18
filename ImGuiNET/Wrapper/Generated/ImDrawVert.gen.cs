@@ -1,17 +1,25 @@
 using System;
 using System.Runtime.CompilerServices;
-using System.Text;
+
 using UnityEngine;
 
 namespace ImGuiNET
 {
-    public unsafe partial struct ImDrawVert
+    public struct ImDrawVert
     {
         public Vector2 pos;
         public Vector2 uv;
         public uint col;
     }
-    public unsafe partial struct ImDrawVertPtr
+
+    public struct ImDrawVertWorkaround
+    {
+        public Vector2 pos;
+        public Vector2 uv;
+        public Vector4 col;
+    }
+
+    public unsafe struct ImDrawVertPtr
     {
         public ImDrawVert* NativePtr { get; }
         public ImDrawVertPtr(ImDrawVert* nativePtr) => NativePtr = nativePtr;

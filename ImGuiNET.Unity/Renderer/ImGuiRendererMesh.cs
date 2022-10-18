@@ -22,11 +22,10 @@ namespace ImGuiNET.Unity
 
         Mesh _mesh;
         // Color sent with TexCoord1 semantics because otherwise Color attribute would be reordered to come before UVs
-        static readonly VertexAttributeDescriptor[] s_attributes = new[]
-        {   // ImDrawVert layout
+        static readonly VertexAttributeDescriptor[] s_attributes = {   // ImDrawVert layout
             new VertexAttributeDescriptor(VertexAttribute.Position , VertexAttributeFormat.Float32, 2), // position
             new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2), // uv
-            new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.UInt32 , 1), // color
+            new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32 , 4), // color
         };
         // skip all checks and validation when updating the mesh
         const MeshUpdateFlags NoMeshChecks = MeshUpdateFlags.DontNotifyMeshUsers | MeshUpdateFlags.DontRecalculateBounds
@@ -78,6 +77,7 @@ namespace ImGuiNET.Unity
             cmd.EndSample("DearImGui.ExecuteDrawCommands");
         }
 
+        private NativeArray<ImDrawVertWorkaround> _vtxwkArray;
         unsafe void UpdateMesh(ImDrawDataPtr drawData, Vector2 fbSize)
         {
             int subMeshCount = 0; // nr of submeshes is the same as the nr of ImDrawCmd
@@ -109,8 +109,30 @@ namespace ImGuiNET.Unity
                 NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref vtxArray, AtomicSafetyHandle.GetTempMemoryHandle());
                 NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref idxArray, AtomicSafetyHandle.GetTempMemoryHandle());
 #endif
+
+                ImDrawVertWorkaround* tempArray = stackalloc ImDrawVertWorkaround[vtxArray.Length];
+                
+                for (int i = 0; i < vtxArray.Length; i++)
+                {
+                    tempArray[i].pos = vtxArray[i].pos;
+                    tempArray[i].uv = vtxArray[i].uv;
+                    tempArray[i].col = new Vector4
+                    (
+                        (vtxArray[i].col & 0xff) / 256.0f,
+                        ((vtxArray[i].col >> 8) & 0xff) / 256.0f,
+                        ((vtxArray[i].col >> 16) & 0xff) / 256.0f,
+                        ((vtxArray[i].col >> 24) & 0xff) / 256.0f
+                    );
+                }
+
+                _vtxwkArray = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<ImDrawVertWorkaround>(tempArray, vtxArray.Length, Allocator.Temp);
+
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+                NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref _vtxwkArray, AtomicSafetyHandle.GetTempMemoryHandle());
+#endif
+
                 // upload vertex/index data
-                _mesh.SetVertexBufferData(vtxArray, 0, vtxOf, vtxArray.Length, 0, NoMeshChecks);
+                _mesh.SetVertexBufferData(_vtxwkArray, 0, vtxOf, _vtxwkArray.Length, 0, NoMeshChecks);
                 _mesh.SetIndexBufferData (idxArray, 0, idxOf, idxArray.Length,    NoMeshChecks);
 
                 // define subMeshes
