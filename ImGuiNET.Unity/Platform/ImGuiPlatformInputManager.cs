@@ -24,7 +24,7 @@ namespace ImGuiNET.Unity
         ImGuiMouseCursor _lastCursor = ImGuiMouseCursor.COUNT;                  // last cursor requested by ImGui
 
         readonly IniSettingsAsset _iniSettings;                                 // ini settings data
-
+#if !(UNITY_ANDROID && !UNITY_EDITOR)
         readonly PlatformCallbacks _callbacks = new PlatformCallbacks
         {
             GetClipboardText = (_) => GUIUtility.systemCopyBuffer,
@@ -34,12 +34,14 @@ namespace ImGuiNET.Unity
             DebugBreak = () => System.Diagnostics.Debugger.Break(),
 #endif
         };
-
+#endif
         public ImGuiPlatformInputManager(CursorShapesAsset cursorShapes, IniSettingsAsset iniSettings)
         {
             _cursorShapes = cursorShapes;
             _iniSettings = iniSettings;
+#if !(UNITY_ANDROID && !UNITY_EDITOR)
             _callbacks.ImeSetInputScreenPos = (x, y) => Input.compositionCursorPos = new Vector2(x, y);
+#endif
         }
 
         public bool Initialize(ImGuiIOPtr io)
@@ -49,7 +51,9 @@ namespace ImGuiNET.Unity
             io.BackendFlags &= ~ImGuiBackendFlags.HasSetMousePos;               // can't honor io.WantSetMousePos requests
             // io.BackendFlags |= ImGuiBackendFlags.HasGamepad;                 // set by UpdateGamepad()
 
+#if !(UNITY_ANDROID && !UNITY_EDITOR)
             _callbacks.Assign(io);                                              // assign platform callbacks
+#endif
             io.ClipboardUserData = IntPtr.Zero;
 
             if (_iniSettings != null)                                           // ini settings
@@ -65,7 +69,9 @@ namespace ImGuiNET.Unity
 
         public void Shutdown(ImGuiIOPtr io)
         {
+#if !(UNITY_ANDROID && !UNITY_EDITOR)
             _callbacks.Unset(io);
+#endif
             io.SetBackendPlatformName(null);
         }
 
@@ -79,7 +85,9 @@ namespace ImGuiNET.Unity
             io.DeltaTime = Time.unscaledDeltaTime;                              // setup timestep
 
             // input
+#if !(UNITY_ANDROID && !UNITY_EDITOR)   
             UpdateKeyboard(io);                                                 // update keyboard state
+#endif
             UpdateMouse(io);                                                    // update mouse state
             UpdateCursor(io, ImGui.GetMouseCursor());                           // update Unity cursor with the cursor requested by ImGui
 
