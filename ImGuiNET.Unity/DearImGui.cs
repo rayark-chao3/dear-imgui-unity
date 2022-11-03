@@ -4,6 +4,9 @@ using Unity.Profiling;
 
 namespace ImGuiNET.Unity
 {
+    using System;
+    using System.Collections;
+
     // This component is responsible for setting up ImGui for use in Unity.
     // It holds the necessary context and sets it up before any operation is done to ImGui.
     // (e.g. set the context, texture and font managers before calling Layout)
@@ -11,13 +14,20 @@ namespace ImGuiNET.Unity
     /// <summary>
     /// Dear ImGui integration into Unity
     /// </summary>
+    public enum CommandBufferMode
+    {
+        AttachToCamera,
+        ExecuteAfterTheEndOfFrame
+    }
+
     public class DearImGui : MonoBehaviour
     {
-        ImGuiUnityContext _context;
-        IImGuiRenderer _renderer;
-        IImGuiPlatform _platform;
-        CommandBuffer _cmd;
-        bool _usingURP;
+        private ImGuiUnityContext _context;
+        private IImGuiRenderer _renderer;
+        private IImGuiPlatform _platform;
+        private CommandBuffer _cmd;
+        private bool _usingURP;
+        private Coroutine _endOfFrameCoroutine;
 
         public event System.Action Layout;  // Layout event for *this* ImGui instance
         [SerializeField] bool _doGlobalLayout = true; // do global/default Layout event too
@@ -27,6 +37,7 @@ namespace ImGuiNET.Unity
 
         [SerializeField] RenderUtils.RenderType _rendererType = RenderUtils.RenderType.Mesh;
         [SerializeField] Platform.Type _platformType = Platform.Type.InputManager;
+        [SerializeField] private CommandBufferMode _commandBufferMode;
 
         [Header("Configuration")]
         [SerializeField] IOConfig _initialConfiguration = default;
@@ -43,27 +54,28 @@ namespace ImGuiNET.Unity
         static readonly ProfilerMarker s_layoutPerfMarker = new ProfilerMarker("DearImGui.Layout");
         static readonly ProfilerMarker s_drawListPerfMarker = new ProfilerMarker("DearImGui.RenderDrawLists");
 
-        void Awake()
-        {
-            _context = ImGuiUn.CreateUnityContext();
-        }
+        private void Awake()
+            => _context = ImGuiUn.CreateUnityContext();
 
-        void OnDestroy()
-        {
-            ImGuiUn.DestroyUnityContext(_context);
-        }
+        private void OnDestroy()
+            => ImGuiUn.DestroyUnityContext(_context);
 
-        void OnEnable()
+        private void OnEnable()
         {
             _usingURP = RenderUtils.IsUsingURP();
+
             if (_camera == null) Fail(nameof(_camera));
             if (_renderFeature == null && _usingURP) Fail(nameof(_renderFeature));
 
             _cmd = RenderUtils.GetCommandBuffer(CommandBufferTag);
-            if (_usingURP)
-                _renderFeature.commandBuffer = _cmd;
-            else
-                _camera.AddCommandBuffer(CameraEvent.AfterEverything, _cmd);
+
+            if (_commandBufferMode == CommandBufferMode.AttachToCamera)
+            {
+                if (_usingURP)
+                    _renderFeature.commandBuffer = _cmd;
+                else
+                    _camera.AddCommandBuffer(CameraEvent.AfterEverything, _cmd);
+            }
 
             ImGuiUn.SetUnityContext(_context);
             ImGuiIOPtr io = ImGui.GetIO();
@@ -79,16 +91,27 @@ namespace ImGuiNET.Unity
             if (_platform == null) Fail(nameof(_platform));
             if (_renderer == null) Fail(nameof(_renderer));
 
+            if (_commandBufferMode == CommandBufferMode.ExecuteAfterTheEndOfFrame)
+            {
+                _endOfFrameCoroutine = StartCoroutine(_EndOfFrameUpdate());
+            }
+
             void Fail(string reason)
             {
                 OnDisable();
                 enabled = false;
-                throw new System.Exception($"Failed to start: {reason}");
+                throw new Exception($"Failed to start: {reason}");
             }
         }
 
-        void OnDisable()
+        private void OnDisable()
         {
+            if (_endOfFrameCoroutine != null)
+            {
+                StopCoroutine(_endOfFrameCoroutine);
+                _endOfFrameCoroutine = null;
+            }
+
             ImGuiUn.SetUnityContext(_context);
             ImGuiIOPtr io = ImGui.GetIO();
 
@@ -116,7 +139,8 @@ namespace ImGuiNET.Unity
             _cmd = null;
         }
 
-        void Reset()
+
+        private void Reset()
         {
             _camera = Camera.main;
             _initialConfiguration.SetDefaults();
@@ -128,7 +152,27 @@ namespace ImGuiNET.Unity
             OnEnable();
         }
 
-        void Update()
+
+        private IEnumerator _EndOfFrameUpdate()
+        {
+            var endOfFrame = new WaitForEndOfFrame();
+            while (true)
+            {
+                _Update();
+                yield return endOfFrame;
+                Graphics.ExecuteCommandBuffer(_cmd);
+            }
+        }
+
+        private void Update()
+        {
+            if (_commandBufferMode == CommandBufferMode.AttachToCamera)
+            {
+                _Update();
+            }
+        }
+
+        private void _Update()
         {
             ImGuiUn.SetUnityContext(_context);
             ImGuiIOPtr io = ImGui.GetIO();
@@ -158,14 +202,15 @@ namespace ImGuiNET.Unity
             s_drawListPerfMarker.End();
         }
 
-        void SetRenderer(IImGuiRenderer renderer, ImGuiIOPtr io)
+
+        private void SetRenderer(IImGuiRenderer renderer, ImGuiIOPtr io)
         {
             _renderer?.Shutdown(io);
             _renderer = renderer;
             _renderer?.Initialize(io);
         }
 
-        void SetPlatform(IImGuiPlatform platform, ImGuiIOPtr io)
+        private void SetPlatform(IImGuiPlatform platform, ImGuiIOPtr io)
         {
             _platform?.Shutdown(io);
             _platform = platform;

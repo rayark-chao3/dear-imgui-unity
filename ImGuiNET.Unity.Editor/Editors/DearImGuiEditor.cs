@@ -1,37 +1,40 @@
 using System.Text;
-using UnityEditor;
+
 using UnityEngine;
+using UnityEditor;
 
 namespace ImGuiNET.Unity.Editor
 {
     [CustomEditor(typeof(DearImGui))]
-    class DearImGuiEditor : UnityEditor.Editor
+    internal class DearImGuiEditor : UnityEditor.Editor
     {
-        SerializedProperty _doGlobalLayout;
+        private SerializedProperty _doGlobalLayout;
 
-        SerializedProperty _camera;
-        SerializedProperty _renderFeature;
+        private SerializedProperty _camera;
+        private SerializedProperty _renderFeature;
+        private SerializedProperty _commandBufferMode;
 
-        SerializedProperty _renderer;
-        SerializedProperty _platform;
+        private SerializedProperty _renderer;
+        private SerializedProperty _platform;
 
-        SerializedProperty _initialConfiguration;
-        SerializedProperty _fontAtlasConfiguration;
-        SerializedProperty _iniSettings;
+        private SerializedProperty _initialConfiguration;
+        private SerializedProperty _fontAtlasConfiguration;
+        private SerializedProperty _iniSettings;
 
-        SerializedProperty _shaders;
-        SerializedProperty _style;
-        SerializedProperty _cursorShapes;
+        private SerializedProperty _shaders;
+        private SerializedProperty _style;
+        private SerializedProperty _cursorShapes;
 
-        readonly StringBuilder _messages = new StringBuilder();
+        private readonly StringBuilder _messages = new StringBuilder();
 
-        void OnEnable()
+        private void OnEnable()
         {
             _doGlobalLayout = serializedObject.FindProperty("_doGlobalLayout");
             _camera = serializedObject.FindProperty("_camera");
             _renderFeature = serializedObject.FindProperty("_renderFeature");
             _renderer = serializedObject.FindProperty("_rendererType");
             _platform = serializedObject.FindProperty("_platformType");
+            _commandBufferMode = serializedObject.FindProperty("_commandBufferMode");
             _initialConfiguration = serializedObject.FindProperty("_initialConfiguration");
             _fontAtlasConfiguration = serializedObject.FindProperty("_fontAtlasConfiguration");
             _iniSettings = serializedObject.FindProperty("_iniSettings");
@@ -54,6 +57,7 @@ namespace ImGuiNET.Unity.Editor
             EditorGUILayout.PropertyField(_camera);
             EditorGUILayout.PropertyField(_renderer);
             EditorGUILayout.PropertyField(_platform);
+            EditorGUILayout.PropertyField(_commandBufferMode);
             EditorGUILayout.PropertyField(_initialConfiguration);
             EditorGUILayout.PropertyField(_fontAtlasConfiguration);
             EditorGUILayout.PropertyField(_iniSettings);
@@ -73,7 +77,7 @@ namespace ImGuiNET.Unity.Editor
                 (target as DearImGui)?.Reload();
         }
 
-        void CheckRequirements()
+        private void CheckRequirements()
         {
             _messages.Clear();
             if (_camera.objectReferenceValue == null)
